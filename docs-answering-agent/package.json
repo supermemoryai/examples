@@ -1,0 +1,20 @@
+{
+  "name": "docs-answering-agent",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "ingest": "tsx ingest.ts",
+    "ask": "tsx agent.ts"
+  },
+  "dependencies": {
+    "@supermemory/bash": "latest",
+    "ai": "^6.0.0",
+    "@ai-sdk/anthropic": "^3.0.0",
+    "zod": "^3.23.0",
+    "dotenv": "^16.4.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}
