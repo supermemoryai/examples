@@ -1,0 +1,43 @@
+MUTUAL NON-DISCLOSURE AGREEMENT (TEMPLATE — EXAMPLE ONLY)
+
+This Mutual Non-Disclosure Agreement ("Agreement") is entered into as of
+[EFFECTIVE DATE] between [PARTY A], a Delaware corporation, and [PARTY B]
+(each a "Party" and together the "Parties").
+
+1. CONFIDENTIAL INFORMATION
+   "Confidential Information" means any non-public information disclosed by
+   one Party (the "Discloser") to the other (the "Recipient"), in any form,
+   that is marked confidential or that a reasonable person would understand
+   to be confidential, including business plans, source code, customer lists,
+   pricing, and unreleased product information.
+
+2. OBLIGATIONS
+   The Recipient shall (a) use Confidential Information solely to evaluate
+   or pursue a business relationship between the Parties, (b) protect it
+   using at least the same degree of care it uses for its own confidential
+   information (and no less than reasonable care), and (c) limit access to
+   employees and contractors with a need to know who are bound by
+   confidentiality obligations no less protective than those herein.
+
+3. EXCLUSIONS
+   Confidential Information does not include information that: (a) is or
+   becomes publicly known through no fault of the Recipient; (b) was known
+   to the Recipient before disclosure without obligation of confidentiality;
+   (c) is independently developed without reference to the Confidential
+   Information; or (d) is rightfully obtained from a third party without
+   restriction.
+
+4. TERM
+   This Agreement begins on the Effective Date and continues for two (2)
+   years. Confidentiality obligations survive for five (5) years following
+   the date of disclosure, or indefinitely with respect to trade secrets.
+
+5. REMEDIES
+   The Parties acknowledge that breach of this Agreement may cause
+   irreparable harm for which monetary damages are inadequate, and that the
+   Discloser is entitled to seek injunctive relief in addition to any other
+   remedies available at law or in equity.
+
+6. GOVERNING LAW
+   This Agreement is governed by the laws of the State of Delaware, without
+   regard to its conflict of laws principles.
