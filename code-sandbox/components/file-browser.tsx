@@ -114,7 +114,7 @@ export function FileBrowser({ sandboxId }: FileBrowserProps) {
         )}
         {sandboxId && files.length === 0 && !loading && !error && (
           <div className="text-slate-500">
-            No files in /home/daytona/memory/ yet.
+            No files in /home/user/memory/ yet.
           </div>
         )}
         <ul className="space-y-1">

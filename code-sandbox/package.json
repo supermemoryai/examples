@@ -10,7 +10,7 @@
     "next": "^15.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "@daytonaio/sdk": "^0.164.0",
+    "@e2b/code-interpreter": "^1.0.0",
     "ai": "^4.0.0",
     "@ai-sdk/anthropic": "^1.0.0",
     "@ai-sdk/react": "^1.0.0",

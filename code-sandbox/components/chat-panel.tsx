@@ -186,7 +186,7 @@ export function ChatPanel({ sandboxId, collapsed, onToggle }: ChatPanelProps) {
             <p className="mt-1 max-w-xs text-xs">
               The assistant can run shell commands in your sandbox and read
               files from persistent memory at{" "}
-              <span className="font-mono">/home/daytona/memory/</span>.
+              <span className="font-mono">/home/user/memory/</span>.
             </p>
           </div>
         )}

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDaytona } from "@/lib/daytona";
+import { getSandbox } from "@/lib/e2b";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -51,8 +51,7 @@ export async function POST(req: NextRequest) {
 
     const runtime = RUNTIMES[language];
 
-    const daytona = getDaytona();
-    const sandbox = await daytona.get(sandboxId);
+    const sbx = await getSandbox(sandboxId);
 
     const tmpFile = `/tmp/run_${Date.now()}.${runtime.ext}`;
 
@@ -69,21 +68,21 @@ export async function POST(req: NextRequest) {
       `${heredocTag}\n` +
       `${runtime.cmd} ${tmpFile}`;
 
-    // executeCommand takes a single shell-string command; we wrap our script
+    // commands.run takes a single shell-string command; we wrap our script
     // in `bash -c '<script>'` with the script safely single-quoted.
     const shellLine = `bash -c ${shellQuote(script)}`;
 
-    const result = await sandbox.process.executeCommand(shellLine);
+    const {
+      stdout: out,
+      stderr: err_out,
+      exitCode: code_out,
+    } = await sbx.commands.run(shellLine);
 
-    // The Daytona SDK returns { exitCode, result } with merged stdout/stderr.
-    // We surface a non-zero exit code's output as stderr so the UI can color
-    // it red, otherwise treat the whole thing as stdout.
-    const merged = result.result ?? "";
-    const exitCode = typeof result.exitCode === "number" ? result.exitCode : 0;
-    const stdout = exitCode === 0 ? merged : "";
-    const stderr = exitCode === 0 ? "" : merged;
-
-    return NextResponse.json({ stdout, stderr, exitCode });
+    return NextResponse.json({
+      stdout: out ?? "",
+      stderr: err_out ?? "",
+      exitCode: code_out ?? 0,
+    });
   } catch (err) {
     console.error("[/api/execute] failed", err);
     return NextResponse.json(

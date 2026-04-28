@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Code Sandbox with Memory",
   description:
-    "Browser-based code editor that runs in a Daytona sandbox with SMFS-mounted persistent memory.",
+    "Browser-based code editor that runs in an E2B sandbox with SMFS-mounted persistent memory.",
 };
 
 export default function RootLayout({

@@ -1,20 +1,20 @@
 import { anthropic } from "@ai-sdk/anthropic";
 import { streamText, tool } from "ai";
 import { z } from "zod";
-import { getDaytona } from "@/lib/daytona";
+import { getSandbox } from "@/lib/e2b";
 import { requireEnv } from "@/lib/env";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
 const SYSTEM_PROMPT =
-  "You are a coding assistant. You can execute commands in the user's sandbox and read/write to their persistent memory at /home/daytona/memory/. Help them debug, explain code, and save useful snippets to memory for future reference.";
+  "You are a coding assistant. You can execute commands in the user's sandbox and read/write to their persistent memory at /home/user/memory/. Help them debug, explain code, and save useful snippets to memory for future reference.";
 
 export async function POST(req: Request) {
   const anthropicKey = requireEnv("ANTHROPIC_API_KEY");
   if (anthropicKey instanceof Response) return anthropicKey;
-  const daytonaKey = requireEnv("DAYTONA_API_KEY");
-  if (daytonaKey instanceof Response) return daytonaKey;
+  const e2bKey = requireEnv("E2B_API_KEY");
+  if (e2bKey instanceof Response) return e2bKey;
 
   const body = await req.json();
   const { messages, sandboxId } = body ?? {};
@@ -26,8 +26,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const daytona = getDaytona();
-  const sandbox = await daytona.get(sandboxId);
+  const sbx = await getSandbox(sandboxId);
 
   const result = streamText({
     model: anthropic("claude-sonnet-4-20250514"),
@@ -40,11 +39,14 @@ export async function POST(req: Request) {
         parameters: z.object({ command: z.string() }),
         execute: async ({ command }) => {
           try {
-            const r = await sandbox.process.executeCommand(command);
-            const out = r.result ?? "";
+            const r = await sbx.commands.run(command);
+            const out = r.stdout ?? "";
+            const errOut = r.stderr ?? "";
+            const merged = errOut ? `${out}${out ? "\n" : ""}${errOut}` : out;
             const code = typeof r.exitCode === "number" ? r.exitCode : 0;
-            if (!out) return code === 0 ? "(no output)" : `(no output, exit ${code})`;
-            return code === 0 ? out : `${out}\n[exit ${code}]`;
+            if (!merged)
+              return code === 0 ? "(no output)" : `(no output, exit ${code})`;
+            return code === 0 ? merged : `${merged}\n[exit ${code}]`;
           } catch (e) {
             return `Error: ${e instanceof Error ? e.message : String(e)}`;
           }
@@ -55,10 +57,10 @@ export async function POST(req: Request) {
         parameters: z.object({ path: z.string() }),
         execute: async ({ path }) => {
           try {
-            const r = await sandbox.process.executeCommand(
-              `cat /home/daytona/memory/${path}`,
+            const r = await sbx.commands.run(
+              `cat /home/user/memory/${path}`,
             );
-            return r.result || "(empty)";
+            return r.stdout || "(empty)";
           } catch (e) {
             return `Error: ${e instanceof Error ? e.message : String(e)}`;
           }

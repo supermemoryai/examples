@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDaytona } from "@/lib/daytona";
+import { getSandbox } from "@/lib/e2b";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -58,8 +58,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const daytona = getDaytona();
-    const sandbox = await daytona.get(sandboxId);
+    const sbx = await getSandbox(sandboxId);
 
     // If a `file` query param is provided, return that file's contents.
     if (file) {
@@ -70,19 +69,17 @@ export async function GET(req: NextRequest) {
         );
       }
 
-      const result = await sandbox.process.executeCommand(
-        `cat /home/daytona/memory/${file}`,
+      const result = await sbx.commands.run(
+        `cat /home/user/memory/${file}`,
       );
-      const content = result.result ?? "";
+      const content = result.stdout ?? "";
       return NextResponse.json({ content });
     }
 
     // Otherwise, list the memory directory.
-    const result = await sandbox.process.executeCommand(
-      "ls -la /home/daytona/memory/",
-    );
+    const result = await sbx.commands.run("ls -la /home/user/memory/");
 
-    const raw = result.result ?? "";
+    const raw = result.stdout ?? "";
     const files = parseLs(raw);
 
     return NextResponse.json({ files });

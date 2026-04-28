@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDaytona } from "@/lib/daytona";
+import { createSandbox, getSandbox } from "@/lib/e2b";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -7,16 +7,13 @@ export const maxDuration = 120;
 // Bump this in one place to roll the example forward to a new SMFS release.
 const SMFS_VERSION = "v0.0.1-rc2";
 
-const SMFS_INSTALL = `mkdir -p $HOME/.local/bin && \
-curl -sL https://github.com/supermemoryai/smfs/releases/download/${SMFS_VERSION}/smfs-linux-x64 -o $HOME/.local/bin/smfs && \
-chmod +x $HOME/.local/bin/smfs && \
-echo 'user_allow_other' | sudo tee -a /etc/fuse.conf > /dev/null`;
+const SMFS_INSTALL = `curl -fsSL https://smfs.ai/install | bash -s -- ${SMFS_VERSION}`;
 
 // Wait up to ~10s for the FUSE mount to come up. Polling `mountpoint -q` is
 // far more reliable than a fixed `sleep` because mount latency varies with
 // network/login speed.
 const MOUNT_WAIT = `for i in $(seq 1 20); do \
-  if mountpoint -q /home/daytona/memory; then exit 0; fi; \
+  if mountpoint -q /home/user/memory; then exit 0; fi; \
   sleep 0.5; \
 done; \
 echo "smfs mount did not become ready in time" >&2; \
@@ -32,28 +29,28 @@ export async function POST() {
       );
     }
 
-    const daytona = getDaytona();
-
-    const sandbox = await daytona.create({
-      envVars: {
-        SUPERMEMORY_API_KEY: supermemoryKey,
-      },
+    const sbx = await createSandbox({
+      SUPERMEMORY_API_KEY: supermemoryKey,
+      ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ?? "",
     });
 
+    // /dev/fuse exists in E2B but is root-only by default; loosen perms so the
+    // unprivileged `user` account can mount FUSE filesystems.
+    await sbx.commands.run("sudo chmod 666 /dev/fuse");
+
     // Install SMFS binary
-    await sandbox.process.executeCommand(SMFS_INSTALL);
+    await sbx.commands.run(SMFS_INSTALL, { timeoutMs: 60_000 });
 
     // Login with the API key
-    await sandbox.process.executeCommand(
-      "$HOME/.local/bin/smfs login --key $SUPERMEMORY_API_KEY",
-    );
+    await sbx.commands.run("smfs login --key $SUPERMEMORY_API_KEY");
 
     // Mount the memory directory in the background, then poll for readiness.
-    await sandbox.process.executeCommand(
-      `bash -c '$HOME/.local/bin/smfs mount code_sandbox --ephemeral --path /home/daytona/memory --foreground &' && bash -c ${JSON.stringify(MOUNT_WAIT)}`,
+    await sbx.commands.run(
+      "bash -c 'smfs mount code_sandbox --ephemeral --path /home/user/memory --foreground &' && " +
+        MOUNT_WAIT,
     );
 
-    return NextResponse.json({ sandboxId: sandbox.id });
+    return NextResponse.json({ sandboxId: sbx.sandboxId });
   } catch (err) {
     console.error("[/api/sandbox POST] failed", err);
     return NextResponse.json(
@@ -78,9 +75,8 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    const daytona = getDaytona();
-    const sandbox = await daytona.get(sandboxId);
-    await daytona.delete(sandbox);
+    const sbx = await getSandbox(sandboxId);
+    await sbx.kill();
 
     return NextResponse.json({ ok: true });
   } catch (err) {

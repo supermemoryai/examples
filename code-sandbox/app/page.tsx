@@ -7,27 +7,21 @@ import { ChatPanel } from "@/components/chat-panel";
 import { FileBrowser } from "@/components/file-browser";
 
 const STARTER_CODE: Record<Language, string> = {
-  python: `# Your code runs in a Daytona sandbox.
-# Persistent memory is mounted at /home/daytona/memory/.
+  python: `# Your code runs in an E2B sandbox.
+# Persistent memory is mounted at /home/user/memory/.
 import os
 
 print('hello from python')
-print('memory contents:', os.listdir('/home/daytona/memory'))
+print('memory contents:', os.listdir('/home/user/memory'))
 `,
-  javascript: `// Your code runs in a Daytona sandbox.
-// Persistent memory is mounted at /home/daytona/memory/.
+  javascript: `// Your code runs in an E2B sandbox.
+// Persistent memory is mounted at /home/user/memory/.
 const fs = require('fs');
 
 console.log('hello from node');
-console.log('memory contents:', fs.readdirSync('/home/daytona/memory'));
+console.log('memory contents:', fs.readdirSync('/home/user/memory'));
 `,
 };
-
-// NOTE: SMFS sync from Daytona datacenter IPs is currently rate-limited; the
-// banner below explains the user-visible consequence. Remove it once that
-// limitation is lifted upstream.
-const LIMITATION_NOTE =
-  "SMFS sync is currently limited from Daytona datacenter IPs. Memory operations work locally in the sandbox but may not sync to Supermemory cloud. For full sync support, see the Research Assistant example which uses ";
 
 export default function Home() {
   const [sandboxId, setSandboxId] = useState<string | null>(null);
@@ -81,7 +75,7 @@ export default function Home() {
   // NOTE: `beforeunload` is unreliable in modern browsers — BFCache, mobile
   // tab suspension, force-quit, and slow networks can all skip this handler.
   // For production deployments, rely on a server-side TTL / idle-expiration
-  // policy on the Daytona sandbox rather than client-side cleanup.
+  // policy on the E2B sandbox rather than client-side cleanup.
   useEffect(() => {
     if (!sandboxId) return;
 
@@ -162,12 +156,6 @@ export default function Home() {
 
   return (
     <main className="flex h-screen flex-col">
-      {/* SMFS limitation banner */}
-      <div className="border-b border-amber-700/40 bg-amber-900/30 px-4 py-2 text-xs text-amber-200">
-        <span className="font-semibold">Note:</span> {LIMITATION_NOTE}
-        <span className="font-mono">@supermemory/bash</span>.
-      </div>
-
       {/* Header */}
       <header className="flex items-center justify-between border-b border-slate-700 bg-slate-800 px-4 py-2">
         <div>
@@ -175,7 +163,7 @@ export default function Home() {
             Code Sandbox with Memory
           </h1>
           <p className="text-[11px] text-slate-400">
-            Edit, run, and debug code in a Daytona sandbox with persistent
+            Edit, run, and debug code in an E2B sandbox with persistent
             memory.
           </p>
         </div>
@@ -194,7 +182,7 @@ export default function Home() {
             <span className="spinner inline-block h-8 w-8 rounded-full border-4 border-blue-500" />
             <p className="text-sm">Setting up sandbox…</p>
             <p className="text-xs text-slate-500">
-              Provisioning Daytona container, installing SMFS, and mounting
+              Provisioning E2B sandbox, installing SMFS, and mounting
               memory.
             </p>
           </div>
@@ -209,7 +197,7 @@ export default function Home() {
               {bootError}
             </pre>
             <p className="mt-3 text-xs text-red-300">
-              Make sure DAYTONA_API_KEY, SUPERMEMORY_API_KEY, and
+              Make sure E2B_API_KEY, SUPERMEMORY_API_KEY, and
               ANTHROPIC_API_KEY are set in your environment.
             </p>
           </div>
