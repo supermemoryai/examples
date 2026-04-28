@@ -99,7 +99,7 @@ async def seed_customer(customer_id: str, files: dict[str, str]) -> None:
     for path, content in files.items():
         parent = path.rsplit("/", 1)[0] or "/"
         await bash.exec(f"mkdir -p {shlex.quote(parent)}")
-        cmd = f"cat > {shlex.quote(path)} <<'SMEOF_DOC'\n{content}\nSMEOF_DOC"
+        cmd = f"cat > {shlex.quote(path)} <<'__SM_EOF__'\n{content}\n__SM_EOF__"
         r = await bash.exec(cmd)
         if r.exit_code != 0:
             print(f"  FAILED {path}: {r.stderr}")

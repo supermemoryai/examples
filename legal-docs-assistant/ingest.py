@@ -31,7 +31,7 @@ async def main() -> None:
     for path in files:
         content = path.read_text()
         target = f"{CONTAINER_PATH}/{path.name}"
-        cmd = f"cat > {shlex.quote(target)} <<'SMEOF_DOC'\n{content}\nSMEOF_DOC"
+        cmd = f"cat > {shlex.quote(target)} <<'__SM_EOF__'\n{content}\n__SM_EOF__"
         r = await bash.exec(cmd)
         if r.exit_code != 0:
             print(f"FAILED {path.name}: {r.stderr}")

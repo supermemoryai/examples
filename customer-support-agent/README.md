@@ -15,6 +15,8 @@ Each customer gets their own container tag: `support_<customer_id>`. When the ag
 ## Setup
 
 ```bash
+cd customer-support-agent
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
 # edit .env and fill in your API keys
@@ -47,7 +49,7 @@ Ticket: I'm having billing issues again
   > sgrep "billing" /tickets
   > cat /tickets/2024-01-billing.md
   > cat /tickets/2024-06-billing.md
-  > cat > /tickets/2024-XX-billing.md <<'EOF' ...
+  > cat > /tickets/2024-11-billing.md <<'__SM_EOF__' ...
 
 Response:
 Hi Jane,

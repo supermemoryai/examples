@@ -3,6 +3,10 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { createBash } from "@supermemory/bash";
 
+function shellQuote(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`;
+}
+
 async function main() {
   const apiKey = process.env.SUPERMEMORY_API_KEY;
   if (!apiKey) {
@@ -26,16 +30,13 @@ async function main() {
 
   for (const file of files) {
     const content = readFileSync(join(docsDir, file), "utf8");
-    const escaped = content.replace(/'/g, `'\\''`);
-    const result = await bash.exec(`cat > /docs/${file} <<'__SM_EOF__'\n${content}\n__SM_EOF__`);
+    const target = shellQuote(`/docs/${file}`);
+    const result = await bash.exec(
+      `cat > ${target} <<'__SM_EOF__'\n${content}\n__SM_EOF__`,
+    );
     if (result.exitCode !== 0) {
       console.error(`Failed to write ${file}: ${result.stderr}`);
-      // Fallback for content that might contain the heredoc terminator.
-      const fallback = await bash.exec(`echo '${escaped}' > /docs/${file}`);
-      if (fallback.exitCode !== 0) {
-        console.error(`Fallback also failed: ${fallback.stderr}`);
-        continue;
-      }
+      continue;
     }
     console.log(`Ingested /docs/${file} (${content.length} bytes)`);
   }

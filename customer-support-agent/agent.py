@@ -17,6 +17,29 @@ SYSTEM_PROMPT = (
 )
 
 
+def bash_tool(description: str) -> dict:
+    return {
+        "name": "bash",
+        "description": description,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "cmd": {"type": "string", "description": "The bash command to run."}
+            },
+            "required": ["cmd"],
+        },
+    }
+
+
+def format_tool_output(r) -> str:
+    output = r.stdout
+    if r.stderr:
+        output += f"\n[stderr]: {r.stderr}"
+    if r.exit_code != 0:
+        output += f"\n[exit_code]: {r.exit_code}"
+    return output or "(no output)"
+
+
 async def run_agent(customer_id: str, ticket: str) -> str:
     container_tag = f"support_{customer_id}"
 
@@ -27,33 +50,21 @@ async def run_agent(customer_id: str, ticket: str) -> str:
     bash = result.bash
 
     profile = await bash.exec("cat /profile.md")
-    profile_text = profile.stdout.strip() or "(no profile available yet)"
+    profile_summary = profile.stdout.strip() or "(no profile available yet)"
 
     user_message = (
         f"Customer ID: {customer_id}\n"
-        f"Container profile:\n{profile_text}\n\n"
+        f"Container profile:\n{profile_summary}\n\n"
         f"New ticket from customer:\n{ticket}\n\n"
         "Search their history, draft a response, and save the ticket."
     )
 
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-    tools = [
-        {
-            "name": "bash",
-            "description": result.tool_description,
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "cmd": {"type": "string", "description": "The bash command to run."}
-                },
-                "required": ["cmd"],
-            },
-        }
-    ]
+    tools = [bash_tool(result.tool_description)]
 
-    messages: list[dict] = [{"role": "user", "content": user_message}]
+    messages = [{"role": "user", "content": user_message}]
 
-    for _ in range(15):
+    for _ in range(10):
         response = client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=4096,
@@ -75,16 +86,11 @@ async def run_agent(customer_id: str, ticket: str) -> str:
                 cmd = block.input.get("cmd", "")
                 print(f"  > {cmd}")
                 r = await bash.exec(cmd)
-                output = r.stdout
-                if r.stderr:
-                    output += f"\n[stderr]: {r.stderr}"
-                if r.exit_code != 0:
-                    output += f"\n[exit_code]: {r.exit_code}"
                 tool_results.append(
                     {
                         "type": "tool_result",
                         "tool_use_id": block.id,
-                        "content": output or "(no output)",
+                        "content": format_tool_output(r),
                     }
                 )
         messages.append({"role": "user", "content": tool_results})
