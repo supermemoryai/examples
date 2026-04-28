@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Personal Knowledge Base</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <h1>📒 Notes</h1>
+        <button class="btn btn-primary" id="add-note-btn">＋ Add Note</button>
+      </div>
+      <ul class="note-list" id="note-list">
+        <li class="note-empty">Loading…</li>
+      </ul>
+    </aside>
+
+    <main class="chat">
+      <header class="chat-header">
+        <button class="btn btn-icon mobile-only" id="toggle-sidebar" aria-label="Toggle notes">☰</button>
+        <h2>Chat with your knowledge base</h2>
+      </header>
+      <div class="messages" id="messages">
+        <div class="welcome">
+          <h3>👋 Welcome</h3>
+          <p>Add a few notes on the left, then ask me anything about them. I can search across all your notes and cite where I found the information.</p>
+        </div>
+      </div>
+      <form class="composer" id="composer">
+        <textarea
+          id="message-input"
+          placeholder="Ask anything about your notes…"
+          rows="1"
+          required
+        ></textarea>
+        <button type="submit" class="btn btn-primary" id="send-btn">Send</button>
+      </form>
+    </main>
+  </div>
+
+  <!-- Add note modal -->
+  <div class="modal" id="add-modal" hidden>
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>New note</h3>
+        <button class="btn btn-icon" data-close-modal aria-label="Close">×</button>
+      </div>
+      <form id="add-note-form" class="modal-body">
+        <label>
+          <span>Title</span>
+          <input type="text" id="note-title" required maxlength="120" placeholder="My idea" />
+        </label>
+        <label>
+          <span>Content</span>
+          <textarea id="note-content" required rows="8" placeholder="Write your note in markdown…"></textarea>
+        </label>
+        <div class="modal-actions">
+          <button type="button" class="btn" data-close-modal>Cancel</button>
+          <button type="submit" class="btn btn-primary">Save note</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- View note modal -->
+  <div class="modal" id="view-modal" hidden>
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="view-title">Note</h3>
+        <button class="btn btn-icon" data-close-modal aria-label="Close">×</button>
+      </div>
+      <div class="modal-body">
+        <pre id="view-content" class="note-view"></pre>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
