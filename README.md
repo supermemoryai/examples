@@ -1,26 +1,26 @@
 # Supermemory Examples
 
-Example apps built with [Supermemory](https://supermemory.ai) and [SMFS](https://docs.supermemory.ai/smfs/overview). Each example is a standalone, runnable project you can clone and try.
+Full web-based demo apps showing how to build with Supermemory's persistent memory filesystem (SMFS).
 
-| Example | Description | Stack |
-|---------|-------------|-------|
-| [Legal Docs Assistant](./legal-docs-assistant) | Ingest contracts, query them with semantic search | Python, `supermemory-bash`, Anthropic SDK |
-| [Docs Answering Agent](./docs-answering-agent) | Ingest documentation, answer questions about it | TypeScript, `@supermemory/bash`, Vercel AI SDK |
-| [Customer Support Agent](./customer-support-agent) | Per-customer memory for support ticket drafting | Python, `supermemory-bash`, Anthropic SDK |
+Each example is a self-contained project you can clone and run locally.
 
-## Getting started
+## Examples
 
-1. Get a [Supermemory API key](https://supermemory.ai)
-2. Get an [Anthropic API key](https://console.anthropic.com)
-3. Pick an example, follow its README
+| Example | Stack | SDK | Description |
+|---------|-------|-----|-------------|
+| [Research Assistant](./research-assistant) | Next.js, Tailwind, Vercel AI SDK | `@supermemory/bash` (TypeScript) | Upload documents and chat with an AI that can search and cite them |
+| [Knowledge Base](./knowledge-base) | FastAPI, vanilla HTML/CSS/JS | `supermemory-bash` (Python) | Add notes and chat with an AI that can search your knowledge base |
+| [Code Sandbox](./code-sandbox) | Next.js, Tailwind, E2B SDK | E2B + SMFS mount | Write and run code in a cloud sandbox with persistent AI memory |
 
-## How SMFS works
+## Quick Start
 
-SMFS gives your agent a filesystem backed by Supermemory. The agent uses standard bash commands (`ls`, `cat`, `echo`, `grep`) to read and write files. Writes sync to Supermemory automatically. `sgrep` does semantic search across all files.
+1. Pick an example from the table above
+2. Follow the README in that directory
+3. You'll need a [Supermemory API key](https://supermemory.ai) and an [Anthropic API key](https://console.anthropic.com)
 
-Two flavors:
+## Learn More
 
-- **Mount** (`smfs` binary) — real FUSE/NFS mount for agents with filesystem access
-- **Bash Tool** (`@supermemory/bash` / `supermemory-bash`) — virtual bash for serverless and edge runtimes
-
-These examples use the Bash Tool. See the [SMFS docs](https://docs.supermemory.ai/smfs/overview) for the full picture.
+- [SMFS Documentation](https://docs.supermemory.ai/smfs/overview)
+- [Bash Tool (TypeScript)](https://docs.supermemory.ai/smfs/bash-tool)
+- [Bash Tool (Python)](https://docs.supermemory.ai/smfs/bash-tool-python)
+- [Provider Guides](https://docs.supermemory.ai/smfs/providers/e2b)
