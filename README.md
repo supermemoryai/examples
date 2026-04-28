@@ -10,7 +10,7 @@ Each example is a self-contained project you can clone and run locally.
 |---------|-------|-----|-------------|
 | [Research Assistant](./research-assistant) | Next.js, Tailwind, Vercel AI SDK | `@supermemory/bash` (TypeScript) | Upload documents and chat with an AI that can search and cite them |
 | [Knowledge Base](./knowledge-base) | FastAPI, vanilla HTML/CSS/JS | `supermemory-bash` (Python) | Add notes and chat with an AI that can search your knowledge base |
-| [Code Sandbox](./code-sandbox) | Next.js, Tailwind, Daytona SDK | Daytona + SMFS mount | Write and run code in a cloud sandbox with persistent AI memory |
+| [Code Sandbox](./code-sandbox) | Next.js, Tailwind, E2B SDK | E2B + SMFS mount | Write and run code in a cloud sandbox with persistent AI memory |
 
 ## Quick Start
 
