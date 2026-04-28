@@ -38,16 +38,28 @@ export async function POST(req: Request) {
   for (const file of files) {
     const filename = file.name;
     const content = await file.text();
-    // writeFileViaHeredoc uses a fresh randomized delimiter per call so
-    // user content that happens to contain a previous marker cannot
-    // prematurely close the heredoc.
-    const result = await writeFileViaHeredoc(
-      bash,
-      `/documents/${filename}`,
-      content,
-    );
-    if (result.exitCode !== 0) {
-      errors.push({ filename, error: result.stderr || "unknown error" });
+    if (content.trim().length === 0) {
+      errors.push({ filename, error: "File is empty" });
+      continue;
+    }
+    try {
+      // writeFileViaHeredoc uses a fresh randomized delimiter per call so
+      // user content that happens to contain a previous marker cannot
+      // prematurely close the heredoc.
+      const result = await writeFileViaHeredoc(
+        bash,
+        `/documents/${filename}`,
+        content,
+      );
+      if (result.exitCode !== 0) {
+        errors.push({ filename, error: result.stderr || "unknown error" });
+        continue;
+      }
+    } catch (err) {
+      errors.push({
+        filename,
+        error: err instanceof Error ? err.message : "unknown error",
+      });
       continue;
     }
     ingested.push({ filename, bytes: content.length });

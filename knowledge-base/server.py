@@ -1,7 +1,6 @@
 import json
 import os
 import re
-import secrets
 from typing import AsyncIterator
 
 import anthropic
@@ -40,15 +39,6 @@ def get_anthropic() -> anthropic.Anthropic:
 
 def shell_quote(s: str) -> str:
     return "'" + s.replace("'", "'\\''") + "'"
-
-
-def fresh_heredoc_tag(prefix: str = "SMFS_EOF") -> str:
-    """Generate a heredoc delimiter unlikely to collide with file contents.
-
-    A fresh suffix per write means even content that contains a fixed marker
-    like ``__SM_EOF__`` cannot prematurely close the heredoc.
-    """
-    return f"__{prefix}_{secrets.token_hex(6)}__"
 
 
 # Reject titles with path-traversal, separators, control chars, or that
@@ -118,15 +108,16 @@ async def create_note(note: NoteCreate):
     result = await get_bash()
     bash = result.bash
 
-    # Write the note via heredoc with a randomized delimiter so that note
-    # content containing any fixed marker cannot prematurely close the
-    # heredoc or inject shell commands.
-    tag = fresh_heredoc_tag("SMFS_NOTE_EOF")
+    # Write the note via printf so the content is passed as a shell-quoted
+    # argument rather than through a heredoc. The supermemory_bash SDK does
+    # not support the << heredoc operator (it tokenises << as two separate
+    # LT tokens), so heredoc-based writes produce empty files.  printf '%s'
+    # with a single-quoted argument is correctly parsed by the SDK tokeniser
+    # and supports arbitrary content including newlines.
+    note_body = f"# {safe_title}\n\n{note.content}\n"
     cmd = (
         "mkdir -p /notes && "
-        f"cat > /notes/{shell_quote(safe_title + '.md')} << '{tag}'\n"
-        f"# {safe_title}\n\n{note.content}\n"
-        f"{tag}"
+        f"printf '%s' {shell_quote(note_body)} > /notes/{shell_quote(safe_title + '.md')}"
     )
     r = await bash.exec(cmd)
     if r.exit_code != 0:
