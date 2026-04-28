@@ -1,25 +1,19 @@
 import { createBash } from "@supermemory/bash";
+import { CONTAINER_TAG } from "@/lib/config";
+import { requireEnv } from "@/lib/env";
+import { writeFileViaHeredoc } from "@/lib/bash-utils";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
-function shellQuote(s: string): string {
-  return "'" + s.replace(/'/g, "'\\''") + "'";
-}
-
 export async function POST(req: Request) {
-  const apiKey = process.env.SUPERMEMORY_API_KEY;
-  if (!apiKey) {
-    return new Response(
-      JSON.stringify({ error: "SUPERMEMORY_API_KEY is not set" }),
-      { status: 500, headers: { "content-type": "application/json" } },
-    );
-  }
+  const apiKey = requireEnv("SUPERMEMORY_API_KEY");
+  if (apiKey instanceof Response) return apiKey;
 
   const formData = await req.formData();
   const containerTag =
-    (formData.get("containerTag") as string | null) ?? "research";
+    (formData.get("containerTag") as string | null) ?? CONTAINER_TAG;
 
   const files: File[] = [];
   for (const value of formData.getAll("files")) {
@@ -44,9 +38,13 @@ export async function POST(req: Request) {
   for (const file of files) {
     const filename = file.name;
     const content = await file.text();
-    const target = shellQuote(`/documents/${filename}`);
-    const result = await bash.exec(
-      `cat > ${target} << '__SM_EOF__'\n${content}\n__SM_EOF__`,
+    // writeFileViaHeredoc uses a fresh randomized delimiter per call so
+    // user content that happens to contain a previous marker cannot
+    // prematurely close the heredoc.
+    const result = await writeFileViaHeredoc(
+      bash,
+      `/documents/${filename}`,
+      content,
     );
     if (result.exitCode !== 0) {
       errors.push({ filename, error: result.stderr || "unknown error" });

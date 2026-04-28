@@ -219,7 +219,7 @@ export function ChatPanel({ sandboxId, collapsed, onToggle }: ChatPanelProps) {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 if (input.trim() && !isLoading && sandboxId) {
-                  (e.currentTarget.form as HTMLFormElement).requestSubmit();
+                  e.currentTarget.form?.requestSubmit();
                 }
               }
             }}

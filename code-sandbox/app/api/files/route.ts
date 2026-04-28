@@ -1,16 +1,8 @@
-import { Daytona } from "@daytonaio/sdk";
 import { NextRequest, NextResponse } from "next/server";
+import { getDaytona } from "@/lib/daytona";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
-
-function getDaytona() {
-  const apiKey = process.env.DAYTONA_API_KEY;
-  if (!apiKey) {
-    throw new Error("DAYTONA_API_KEY is not set");
-  }
-  return new Daytona({ apiKey });
-}
 
 export interface MemoryFile {
   name: string;

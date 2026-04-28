@@ -1,5 +1,7 @@
-fastapi>=0.115.0
-uvicorn>=0.32.0
-supermemory-bash>=0.0.1
-anthropic>=0.40.0
-python-dotenv>=1.0.0
+# Pinned to known-good major lines so this example doesn't break six months
+# from now if a dep ships an incompatible release.
+fastapi>=0.115.0,<0.120
+uvicorn>=0.32.0,<0.40
+supermemory-bash>=0.0.1,<0.1
+anthropic>=0.40.0,<1.0
+python-dotenv>=1.0.0,<2.0

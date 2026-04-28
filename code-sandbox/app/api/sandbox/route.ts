@@ -1,23 +1,26 @@
-import { Daytona } from "@daytonaio/sdk";
 import { NextRequest, NextResponse } from "next/server";
+import { getDaytona } from "@/lib/daytona";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-const SMFS_INSTALL =
-  "mkdir -p $HOME/.local/bin && " +
-  "curl -sL https://github.com/supermemoryai/smfs/releases/download/" +
-  "v0.0.1-rc2/smfs-linux-x64 -o $HOME/.local/bin/smfs && " +
-  "chmod +x $HOME/.local/bin/smfs && " +
-  "echo 'user_allow_other' | sudo tee -a /etc/fuse.conf > /dev/null";
+// Bump this in one place to roll the example forward to a new SMFS release.
+const SMFS_VERSION = "v0.0.1-rc2";
 
-function getDaytona() {
-  const apiKey = process.env.DAYTONA_API_KEY;
-  if (!apiKey) {
-    throw new Error("DAYTONA_API_KEY is not set");
-  }
-  return new Daytona({ apiKey });
-}
+const SMFS_INSTALL = `mkdir -p $HOME/.local/bin && \
+curl -sL https://github.com/supermemoryai/smfs/releases/download/${SMFS_VERSION}/smfs-linux-x64 -o $HOME/.local/bin/smfs && \
+chmod +x $HOME/.local/bin/smfs && \
+echo 'user_allow_other' | sudo tee -a /etc/fuse.conf > /dev/null`;
+
+// Wait up to ~10s for the FUSE mount to come up. Polling `mountpoint -q` is
+// far more reliable than a fixed `sleep` because mount latency varies with
+// network/login speed.
+const MOUNT_WAIT = `for i in $(seq 1 20); do \
+  if mountpoint -q /home/daytona/memory; then exit 0; fi; \
+  sleep 0.5; \
+done; \
+echo "smfs mount did not become ready in time" >&2; \
+exit 1`;
 
 export async function POST() {
   try {
@@ -45,9 +48,9 @@ export async function POST() {
       "$HOME/.local/bin/smfs login --key $SUPERMEMORY_API_KEY",
     );
 
-    // Mount the memory directory in the background
+    // Mount the memory directory in the background, then poll for readiness.
     await sandbox.process.executeCommand(
-      "bash -c '$HOME/.local/bin/smfs mount code_sandbox --ephemeral --path /home/daytona/memory --foreground &' && sleep 3",
+      `bash -c '$HOME/.local/bin/smfs mount code_sandbox --ephemeral --path /home/daytona/memory --foreground &' && bash -c ${JSON.stringify(MOUNT_WAIT)}`,
     );
 
     return NextResponse.json({ sandboxId: sandbox.id });

@@ -13,6 +13,39 @@ const addModal = $("#add-modal");
 const viewModal = $("#view-modal");
 const addForm = $("#add-note-form");
 
+// ---------------------------------------------------------------- SSE parser
+
+/**
+ * Parse a `fetch` response body as an SSE stream. Yields `{event, data}`
+ * objects, one per SSE frame (terminated by a blank line). `event` defaults
+ * to `"message"` if the frame omits it; `data` is the joined `data:` lines.
+ */
+async function* parseSSE(response) {
+  if (!response.body) return;
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    let sep;
+    while ((sep = buffer.indexOf("\n\n")) !== -1) {
+      const raw = buffer.slice(0, sep);
+      buffer = buffer.slice(sep + 2);
+      let event = "message";
+      const dataLines = [];
+      for (const line of raw.split("\n")) {
+        if (line.startsWith("event:")) event = line.slice(6).trim();
+        else if (line.startsWith("data:")) dataLines.push(line.slice(5).trim());
+      }
+      yield { event, data: dataLines.join("\n") };
+    }
+  }
+}
+
 // ---------------------------------------------------------------- Notes API
 
 async function loadNotes() {
@@ -119,7 +152,10 @@ $("#add-note-btn").addEventListener("click", () => {
   $("#note-title").value = "";
   $("#note-content").value = "";
   openModal(addModal);
-  setTimeout(() => $("#note-title").focus(), 30);
+  // requestAnimationFrame fires after the next layout/paint, by which point
+  // the modal is visible and focusable. This is the idiomatic "after layout"
+  // hook and replaces the older setTimeout(..., 30) workaround.
+  requestAnimationFrame(() => $("#note-title").focus());
 });
 
 addForm.addEventListener("submit", async (e) => {
@@ -164,9 +200,12 @@ function createAssistantMessage() {
   messagesEl.appendChild(wrap);
   scrollChat();
 
-  // Track the live text bubble + any tool blocks appended afterwards.
+  // We track the streamed assistant text *explicitly* rather than reading it
+  // back out of the DOM in `getFinalText()`. The DOM is for rendering only;
+  // tool blocks and future markup must not leak into chat history.
   let currentBubble = bubble;
-  let textBuffer = "";
+  let currentBubbleBuffer = "";
+  let assistantTextParts = [];
 
   return {
     addText(chunk) {
@@ -174,14 +213,19 @@ function createAssistantMessage() {
         currentBubble = document.createElement("div");
         currentBubble.className = "bubble";
         wrap.appendChild(currentBubble);
-        textBuffer = "";
+        currentBubbleBuffer = "";
       }
-      textBuffer += chunk;
-      currentBubble.textContent = textBuffer;
+      currentBubbleBuffer += chunk;
+      currentBubble.textContent = currentBubbleBuffer;
       scrollChat();
     },
     addToolCall(cmd) {
-      // After a tool call, any new text starts a fresh bubble.
+      // Flush the bubble we were building into the history buffer; any new
+      // text after the tool call starts a fresh bubble.
+      if (currentBubbleBuffer) {
+        assistantTextParts.push(currentBubbleBuffer);
+        currentBubbleBuffer = "";
+      }
       currentBubble = null;
 
       const details = document.createElement("details");
@@ -203,6 +247,10 @@ function createAssistantMessage() {
       return result;
     },
     addError(msg) {
+      if (currentBubbleBuffer) {
+        assistantTextParts.push(currentBubbleBuffer);
+        currentBubbleBuffer = "";
+      }
       currentBubble = null;
       const err = document.createElement("div");
       err.className = "tool-error";
@@ -211,11 +259,11 @@ function createAssistantMessage() {
       scrollChat();
     },
     getFinalText() {
-      // Return concatenation of all bubble text (best-effort for history).
-      return Array.from(wrap.querySelectorAll(".bubble"))
-        .map((b) => b.textContent)
-        .join("\n")
-        .trim();
+      // Combine any flushed text segments with the in-flight buffer.
+      const parts = currentBubbleBuffer
+        ? [...assistantTextParts, currentBubbleBuffer]
+        : assistantTextParts;
+      return parts.join("\n").trim();
     },
   };
 }
@@ -244,11 +292,7 @@ async function sendMessage(message) {
     return;
   }
 
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-
-  const handleEvent = (event, dataStr) => {
+  for await (const { event, data: dataStr } of parseSSE(response)) {
     let data = {};
     try { data = JSON.parse(dataStr); } catch { /* keep empty */ }
 
@@ -271,26 +315,6 @@ async function sendMessage(message) {
       if (finalText) {
         chatHistory.push({ role: "assistant", content: finalText });
       }
-    }
-  };
-
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-
-    // SSE messages are separated by a blank line.
-    let sep;
-    while ((sep = buffer.indexOf("\n\n")) !== -1) {
-      const raw = buffer.slice(0, sep);
-      buffer = buffer.slice(sep + 2);
-      let event = "message";
-      const dataLines = [];
-      for (const line of raw.split("\n")) {
-        if (line.startsWith("event:")) event = line.slice(6).trim();
-        else if (line.startsWith("data:")) dataLines.push(line.slice(5).trim());
-      }
-      handleEvent(event, dataLines.join("\n"));
     }
   }
 }

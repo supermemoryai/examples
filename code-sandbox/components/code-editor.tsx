@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef } from "react";
+// `useRef` is used for the gutter; the textarea itself doesn't need a ref.
 
 export type Language = "python" | "javascript";
 
@@ -23,7 +24,6 @@ export function CodeEditor({
   running = false,
   disabled = false,
 }: CodeEditorProps) {
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const gutterRef = useRef<HTMLDivElement | null>(null);
 
   const lineCount = useMemo(() => {
@@ -104,7 +104,6 @@ export function CodeEditor({
           ))}
         </div>
         <textarea
-          ref={textareaRef}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKeyDown}

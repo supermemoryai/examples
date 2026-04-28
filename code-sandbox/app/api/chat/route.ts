@@ -1,7 +1,8 @@
 import { anthropic } from "@ai-sdk/anthropic";
-import { Daytona } from "@daytonaio/sdk";
 import { streamText, tool } from "ai";
 import { z } from "zod";
+import { getDaytona } from "@/lib/daytona";
+import { requireEnv } from "@/lib/env";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -9,27 +10,11 @@ export const maxDuration = 120;
 const SYSTEM_PROMPT =
   "You are a coding assistant. You can execute commands in the user's sandbox and read/write to their persistent memory at /home/daytona/memory/. Help them debug, explain code, and save useful snippets to memory for future reference.";
 
-function getDaytona() {
-  const apiKey = process.env.DAYTONA_API_KEY;
-  if (!apiKey) {
-    throw new Error("DAYTONA_API_KEY is not set");
-  }
-  return new Daytona({ apiKey });
-}
-
 export async function POST(req: Request) {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return new Response(
-      JSON.stringify({ error: "ANTHROPIC_API_KEY is not set" }),
-      { status: 500, headers: { "content-type": "application/json" } },
-    );
-  }
-  if (!process.env.DAYTONA_API_KEY) {
-    return new Response(
-      JSON.stringify({ error: "DAYTONA_API_KEY is not set" }),
-      { status: 500, headers: { "content-type": "application/json" } },
-    );
-  }
+  const anthropicKey = requireEnv("ANTHROPIC_API_KEY");
+  if (anthropicKey instanceof Response) return anthropicKey;
+  const daytonaKey = requireEnv("DAYTONA_API_KEY");
+  if (daytonaKey instanceof Response) return daytonaKey;
 
   const body = await req.json();
   const { messages, sandboxId } = body ?? {};

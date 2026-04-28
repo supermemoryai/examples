@@ -2,6 +2,8 @@ import { anthropic } from "@ai-sdk/anthropic";
 import { createBash } from "@supermemory/bash";
 import { streamText, tool } from "ai";
 import { z } from "zod";
+import { CONTAINER_TAG, MAX_AGENT_STEPS } from "@/lib/config";
+import { requireEnv } from "@/lib/env";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -11,22 +13,13 @@ const SYSTEM_PROMPT =
   "You are a research assistant. Use the bash tool to search documents with `sgrep`, read them with `cat`, and list them with `ls /documents/`. Always cite which document and section you found information in.";
 
 export async function POST(req: Request) {
-  const apiKey = process.env.SUPERMEMORY_API_KEY;
-  if (!apiKey) {
-    return new Response(
-      JSON.stringify({ error: "SUPERMEMORY_API_KEY is not set" }),
-      { status: 500, headers: { "content-type": "application/json" } },
-    );
-  }
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return new Response(
-      JSON.stringify({ error: "ANTHROPIC_API_KEY is not set" }),
-      { status: 500, headers: { "content-type": "application/json" } },
-    );
-  }
+  const apiKey = requireEnv("SUPERMEMORY_API_KEY");
+  if (apiKey instanceof Response) return apiKey;
+  const anthropicKey = requireEnv("ANTHROPIC_API_KEY");
+  if (anthropicKey instanceof Response) return anthropicKey;
 
   const body = await req.json();
-  const { messages, containerTag = "research" } = body ?? {};
+  const { messages, containerTag = CONTAINER_TAG } = body ?? {};
 
   const { bash, toolDescription } = await createBash({
     apiKey,
@@ -37,7 +30,7 @@ export async function POST(req: Request) {
     model: anthropic("claude-sonnet-4-20250514"),
     system: SYSTEM_PROMPT,
     messages,
-    maxSteps: 10,
+    maxSteps: MAX_AGENT_STEPS,
     tools: {
       bash: tool({
         description: toolDescription,

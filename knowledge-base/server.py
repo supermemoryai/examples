@@ -1,5 +1,7 @@
 import json
 import os
+import re
+import secrets
 from typing import AsyncIterator
 
 import anthropic
@@ -15,15 +17,60 @@ load_dotenv()
 
 
 CONTAINER_TAG = "knowledge_base"
+MAX_AGENT_STEPS = 10
 SYSTEM_PROMPT = (
     "You are a knowledge base assistant. Use the bash tool to search notes "
     "with `sgrep <query> /notes/`, read them with `cat`, and list them with "
     "`ls /notes/`. When answering, cite which note you found the information in."
 )
 
+# Anthropic SDK client is process-level so we don't pay construction cost on
+# every request. The library is thread/async safe.
+_anthropic_client: anthropic.Anthropic | None = None
+
+
+def get_anthropic() -> anthropic.Anthropic:
+    global _anthropic_client
+    if _anthropic_client is None:
+        _anthropic_client = anthropic.Anthropic(
+            api_key=os.environ["ANTHROPIC_API_KEY"]
+        )
+    return _anthropic_client
+
 
 def shell_quote(s: str) -> str:
     return "'" + s.replace("'", "'\\''") + "'"
+
+
+def fresh_heredoc_tag(prefix: str = "SMFS_EOF") -> str:
+    """Generate a heredoc delimiter unlikely to collide with file contents.
+
+    A fresh suffix per write means even content that contains a fixed marker
+    like ``__SM_EOF__`` cannot prematurely close the heredoc.
+    """
+    return f"__{prefix}_{secrets.token_hex(6)}__"
+
+
+# Reject titles with path-traversal, separators, control chars, or that
+# resolve to dot-special names. Mirrors `isSafeFilename` in the code-sandbox
+# example.
+_UNSAFE_CHARS = re.compile(r"[\x00-\x1f/\\`$;&|<>\"\n\r]")
+
+
+def sanitize_note_title(raw: str) -> str:
+    title = raw.strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="Title is required")
+    if title in (".", ".."):
+        raise HTTPException(status_code=400, detail="Invalid title")
+    if ".." in title:
+        raise HTTPException(status_code=400, detail="Invalid title")
+    if _UNSAFE_CHARS.search(title):
+        raise HTTPException(
+            status_code=400,
+            detail="Title contains forbidden characters",
+        )
+    return title
 
 
 def format_tool_output(r) -> str:
@@ -36,6 +83,10 @@ def format_tool_output(r) -> str:
 
 
 async def get_bash():
+    # NOTE: this currently re-establishes a bash session per request. The
+    # supermemory_bash SDK is the right place to add per-container caching;
+    # if/when that lands, hoist this to a module-level cache keyed by
+    # container_tag. For a demo example the latency is acceptable.
     result = await create_bash(
         api_key=os.environ["SUPERMEMORY_API_KEY"],
         container_tag=CONTAINER_TAG,
@@ -63,19 +114,19 @@ class ChatRequest(BaseModel):
 
 @app.post("/api/notes")
 async def create_note(note: NoteCreate):
-    if not note.title.strip():
-        raise HTTPException(status_code=400, detail="Title is required")
-
-    safe_title = note.title.replace("/", "_").strip()
+    safe_title = sanitize_note_title(note.title)
     result = await get_bash()
     bash = result.bash
 
-    # Ensure /notes exists, then write the note via heredoc.
+    # Write the note via heredoc with a randomized delimiter so that note
+    # content containing any fixed marker cannot prematurely close the
+    # heredoc or inject shell commands.
+    tag = fresh_heredoc_tag("SMFS_NOTE_EOF")
     cmd = (
         "mkdir -p /notes && "
-        f"cat > /notes/{shell_quote(safe_title + '.md')} << '__SM_EOF__'\n"
+        f"cat > /notes/{shell_quote(safe_title + '.md')} << '{tag}'\n"
         f"# {safe_title}\n\n{note.content}\n"
-        "__SM_EOF__"
+        f"{tag}"
     )
     r = await bash.exec(cmd)
     if r.exit_code != 0:
@@ -138,35 +189,71 @@ def sse_event(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
 
+def _build_tools(tool_description: str) -> list[dict]:
+    return [
+        {
+            "name": "bash",
+            "description": tool_description,
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "cmd": {
+                        "type": "string",
+                        "description": "The bash command to run.",
+                    }
+                },
+                "required": ["cmd"],
+            },
+        }
+    ]
+
+
+def _messages_from_history(req: ChatRequest) -> list[dict]:
+    messages: list[dict] = [
+        {"role": m.role, "content": m.content} for m in req.history
+    ]
+    messages.append({"role": "user", "content": req.message})
+    return messages
+
+
+async def _run_tool_calls(response, bash) -> AsyncIterator[tuple[str, dict | list]]:
+    """Yield ('sse', event) tuples for each tool call, then a single
+    ('tool_results', list) tuple with the accumulated tool_result blocks for
+    the next turn's user message. If no tool calls were made, the tool_results
+    list is empty.
+    """
+    tool_results: list[dict] = []
+    for block in response.content:
+        if getattr(block, "type", None) != "tool_use":
+            continue
+        cmd = block.input.get("cmd", "") if isinstance(block.input, dict) else ""
+        yield (
+            "sse",
+            sse_event("tool_call", {"name": "bash", "input": {"cmd": cmd}}),
+        )
+        r = await bash.exec(cmd)
+        output = format_tool_output(r)
+        yield ("sse", sse_event("tool_result", {"output": output}))
+        tool_results.append(
+            {
+                "type": "tool_result",
+                "tool_use_id": block.id,
+                "content": output,
+            }
+        )
+    yield ("tool_results", tool_results)
+
+
 async def chat_stream(req: ChatRequest) -> AsyncIterator[str]:
     try:
         result = await get_bash()
         bash = result.bash
 
-        client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-        tools = [
-            {
-                "name": "bash",
-                "description": result.tool_description,
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "cmd": {
-                            "type": "string",
-                            "description": "The bash command to run.",
-                        }
-                    },
-                    "required": ["cmd"],
-                },
-            }
-        ]
+        client = get_anthropic()
+        tools = _build_tools(result.tool_description)
+        messages = _messages_from_history(req)
 
-        messages: list[dict] = []
-        for m in req.history:
-            messages.append({"role": m.role, "content": m.content})
-        messages.append({"role": "user", "content": req.message})
-
-        for _ in range(10):
+        for _ in range(MAX_AGENT_STEPS):
             response = client.messages.create(
                 model="claude-sonnet-4-20250514",
                 max_tokens=4096,
@@ -186,24 +273,12 @@ async def chat_stream(req: ChatRequest) -> AsyncIterator[str]:
 
             messages.append({"role": "assistant", "content": response.content})
 
-            tool_results = []
-            for block in response.content:
-                if getattr(block, "type", None) == "tool_use":
-                    cmd = block.input.get("cmd", "") if isinstance(block.input, dict) else ""
-                    yield sse_event(
-                        "tool_call",
-                        {"name": "bash", "input": {"cmd": cmd}},
-                    )
-                    r = await bash.exec(cmd)
-                    output = format_tool_output(r)
-                    yield sse_event("tool_result", {"output": output})
-                    tool_results.append(
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": block.id,
-                            "content": output,
-                        }
-                    )
+            tool_results: list[dict] = []
+            async for kind, payload in _run_tool_calls(response, bash):
+                if kind == "sse":
+                    yield payload  # type: ignore[misc]
+                else:
+                    tool_results = payload  # type: ignore[assignment]
 
             if not tool_results:
                 yield sse_event("done", {})
@@ -214,6 +289,10 @@ async def chat_stream(req: ChatRequest) -> AsyncIterator[str]:
         yield sse_event("text", {"content": "\n\n(max steps reached)"})
         yield sse_event("done", {})
     except Exception as e:  # noqa: BLE001
+        # Catch-all so the SSE stream always terminates cleanly with an
+        # `error` + `done` pair instead of the connection hanging or
+        # bubbling a 500. Truly unexpected exceptions are still logged to
+        # stderr by uvicorn since we re-yield rather than swallow.
         yield sse_event("error", {"message": str(e)})
         yield sse_event("done", {})
 

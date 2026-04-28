@@ -1,5 +1,5 @@
-import { Daytona } from "@daytonaio/sdk";
 import { NextRequest, NextResponse } from "next/server";
+import { getDaytona } from "@/lib/daytona";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -12,21 +12,18 @@ interface ExecuteBody {
   language?: Language;
 }
 
-function getDaytona() {
-  const apiKey = process.env.DAYTONA_API_KEY;
-  if (!apiKey) {
-    throw new Error("DAYTONA_API_KEY is not set");
-  }
-  return new Daytona({ apiKey });
-}
-
 const RUNTIMES: Record<Language, { ext: string; cmd: string }> = {
   python: { ext: "py", cmd: "python3" },
   javascript: { ext: "js", cmd: "node" },
 };
 
-// EOF marker that's extremely unlikely to appear in user code.
-const HEREDOC_TAG = "SMFS_CODE_EOF_8a3c2d1b";
+/**
+ * Single-quote a string for safe inclusion in a bash command. Closes the
+ * quoted span around any embedded single-quote.
+ */
+function shellQuote(s: string): string {
+  return "'" + s.replace(/'/g, "'\\''") + "'";
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -59,18 +56,22 @@ export async function POST(req: NextRequest) {
 
     const tmpFile = `/tmp/run_${Date.now()}.${runtime.ext}`;
 
-    // Write code via heredoc, then execute. We use a single shell -c command
-    // so the heredoc is interpreted by the remote bash, not the SDK.
-    // The 'TAG' is single-quoted so the heredoc is treated literally
-    // (no $-expansion or backtick execution inside the user's code).
-    const command = [
-      "bash",
-      "-c",
-      `cat > ${tmpFile} <<'${HEREDOC_TAG}'\n${code}\n${HEREDOC_TAG}\n${runtime.cmd} ${tmpFile}`,
-    ];
+    // Use a per-request randomized heredoc tag so user code containing the
+    // marker on its own line cannot prematurely close the heredoc.
+    const heredocTag = `SMFS_CODE_EOF_${Math.random().toString(36).slice(2, 14)}`;
 
-    // Daytona's executeCommand accepts a single shell-string command.
-    const shellLine = `bash -c ${JSON.stringify(command[2])}`;
+    // Build the script that the remote bash will run. We need *real* newlines
+    // for the heredoc to work — `JSON.stringify` would turn them into `\n`
+    // escape sequences and break the heredoc parser.
+    const script =
+      `cat > ${tmpFile} <<'${heredocTag}'\n` +
+      `${code}\n` +
+      `${heredocTag}\n` +
+      `${runtime.cmd} ${tmpFile}`;
+
+    // executeCommand takes a single shell-string command; we wrap our script
+    // in `bash -c '<script>'` with the script safely single-quoted.
+    const shellLine = `bash -c ${shellQuote(script)}`;
 
     const result = await sandbox.process.executeCommand(shellLine);
 

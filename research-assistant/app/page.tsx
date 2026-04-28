@@ -4,8 +4,60 @@ import { useChat } from "@ai-sdk/react";
 import { useCallback, useState } from "react";
 import { Chat } from "@/components/chat";
 import { FileUpload, type UploadedFile } from "@/components/file-upload";
+import { CONTAINER_TAG } from "@/lib/config";
 
-const CONTAINER_TAG = "research";
+interface UploadResponse {
+  ingested?: number;
+  files?: UploadedFile[];
+  errors?: { filename: string; error: string }[];
+  error?: string;
+}
+
+interface UploadResult {
+  ok: boolean;
+  data: UploadResponse;
+  status: number;
+  statusText: string;
+}
+
+/** Pure network call — POST the files and return the parsed JSON body. */
+async function uploadFiles(files: File[]): Promise<UploadResult> {
+  const fd = new FormData();
+  fd.append("containerTag", CONTAINER_TAG);
+  for (const f of files) fd.append("files", f);
+
+  const res = await fetch("/api/ingest", { method: "POST", body: fd });
+  const data = (await res.json()) as UploadResponse;
+  return { ok: res.ok, data, status: res.status, statusText: res.statusText };
+}
+
+/** Pure dedup-by-name merge of newly-ingested files into the existing list. */
+function mergeUploadedFiles(
+  prev: UploadedFile[],
+  incoming: UploadedFile[] | undefined,
+): UploadedFile[] {
+  if (!incoming || incoming.length === 0) return prev;
+  const map = new Map<string, UploadedFile>();
+  for (const f of prev) map.set(f.name, f);
+  for (const f of incoming) map.set(f.name, f);
+  return Array.from(map.values());
+}
+
+/** Build the human-readable summary string posted into the chat. */
+function formatUploadSummary(data: UploadResponse): string {
+  const summary = `📄 Ingested ${data.ingested ?? 0} file(s): ${(
+    data.files ?? []
+  )
+    .map((f) => f.name)
+    .join(", ")}`;
+  const errPart =
+    data.errors && data.errors.length > 0
+      ? `\n⚠️ Errors: ${data.errors
+          .map((e) => `${e.filename} (${e.error})`)
+          .join(", ")}`
+      : "";
+  return summary + errPart;
+}
 
 export default function Home() {
   const { messages, input, handleInputChange, handleSubmit, isLoading, append } =
@@ -21,49 +73,20 @@ export default function Home() {
     async (files: File[]) => {
       setUploading(true);
       try {
-        const fd = new FormData();
-        fd.append("containerTag", CONTAINER_TAG);
-        for (const f of files) fd.append("files", f);
+        const { ok, data, statusText } = await uploadFiles(files);
 
-        const res = await fetch("/api/ingest", { method: "POST", body: fd });
-        const data = (await res.json()) as {
-          ingested?: number;
-          files?: UploadedFile[];
-          errors?: { filename: string; error: string }[];
-          error?: string;
-        };
-
-        if (!res.ok || data.error) {
+        if (!ok || data.error) {
           await append({
             role: "system",
-            content: `❌ Upload failed: ${data.error ?? res.statusText}`,
+            content: `❌ Upload failed: ${data.error ?? statusText}`,
           });
           return;
         }
 
-        if (data.files && data.files.length > 0) {
-          setUploadedFiles((prev) => {
-            const map = new Map<string, UploadedFile>();
-            for (const f of prev) map.set(f.name, f);
-            for (const f of data.files!) map.set(f.name, f);
-            return Array.from(map.values());
-          });
-        }
-
-        const summary = `📄 Ingested ${data.ingested ?? 0} file(s): ${(
-          data.files ?? []
-        )
-          .map((f) => f.name)
-          .join(", ")}`;
-        const errPart =
-          data.errors && data.errors.length > 0
-            ? `\n⚠️ Errors: ${data.errors
-                .map((e) => `${e.filename} (${e.error})`)
-                .join(", ")}`
-            : "";
+        setUploadedFiles((prev) => mergeUploadedFiles(prev, data.files));
         await append({
           role: "system",
-          content: summary + errPart,
+          content: formatUploadSummary(data),
         });
       } catch (err) {
         await append({
@@ -118,7 +141,7 @@ export default function Home() {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
                   if (input.trim() && !isLoading) {
-                    (e.currentTarget.form as HTMLFormElement).requestSubmit();
+                    e.currentTarget.form?.requestSubmit();
                   }
                 }
               }}

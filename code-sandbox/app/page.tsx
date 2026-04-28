@@ -7,19 +7,27 @@ import { ChatPanel } from "@/components/chat-panel";
 import { FileBrowser } from "@/components/file-browser";
 
 const STARTER_CODE: Record<Language, string> = {
-  python:
-    "# Your code runs in a Daytona sandbox.\n" +
-    "# Persistent memory is mounted at /home/daytona/memory/.\n" +
-    "import os\n\n" +
-    "print('hello from python')\n" +
-    "print('memory contents:', os.listdir('/home/daytona/memory'))\n",
-  javascript:
-    "// Your code runs in a Daytona sandbox.\n" +
-    "// Persistent memory is mounted at /home/daytona/memory/.\n" +
-    "const fs = require('fs');\n\n" +
-    "console.log('hello from node');\n" +
-    "console.log('memory contents:', fs.readdirSync('/home/daytona/memory'));\n",
+  python: `# Your code runs in a Daytona sandbox.
+# Persistent memory is mounted at /home/daytona/memory/.
+import os
+
+print('hello from python')
+print('memory contents:', os.listdir('/home/daytona/memory'))
+`,
+  javascript: `// Your code runs in a Daytona sandbox.
+// Persistent memory is mounted at /home/daytona/memory/.
+const fs = require('fs');
+
+console.log('hello from node');
+console.log('memory contents:', fs.readdirSync('/home/daytona/memory'));
+`,
 };
+
+// NOTE: SMFS sync from Daytona datacenter IPs is currently rate-limited; the
+// banner below explains the user-visible consequence. Remove it once that
+// limitation is lifted upstream.
+const LIMITATION_NOTE =
+  "SMFS sync is currently limited from Daytona datacenter IPs. Memory operations work locally in the sandbox but may not sync to Supermemory cloud. For full sync support, see the Research Assistant example which uses ";
 
 export default function Home() {
   const [sandboxId, setSandboxId] = useState<string | null>(null);
@@ -68,8 +76,12 @@ export default function Home() {
     };
   }, []);
 
-  // Best-effort cleanup on tab close. The browser may not wait for the
-  // request, so we use sendBeacon when available.
+  // Best-effort cleanup on tab close.
+  //
+  // NOTE: `beforeunload` is unreliable in modern browsers — BFCache, mobile
+  // tab suspension, force-quit, and slow networks can all skip this handler.
+  // For production deployments, rely on a server-side TTL / idle-expiration
+  // policy on the Daytona sandbox rather than client-side cleanup.
   useEffect(() => {
     if (!sandboxId) return;
 
@@ -152,10 +164,7 @@ export default function Home() {
     <main className="flex h-screen flex-col">
       {/* SMFS limitation banner */}
       <div className="border-b border-amber-700/40 bg-amber-900/30 px-4 py-2 text-xs text-amber-200">
-        <span className="font-semibold">Note:</span> SMFS sync is currently
-        limited from Daytona datacenter IPs. Memory operations work locally in
-        the sandbox but may not sync to Supermemory cloud. For full sync
-        support, see the Research Assistant example which uses{" "}
+        <span className="font-semibold">Note:</span> {LIMITATION_NOTE}
         <span className="font-mono">@supermemory/bash</span>.
       </div>
 
